@@ -21,14 +21,16 @@ func New(table string) (*SQLiteAdapter, error) {
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
-	migrate(db)
+	if err := migrate(db); err != nil {
+		return nil, err
+	}
 	return &SQLiteAdapter{db}, nil
 }
 
 func migrate(db *sql.DB) error {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS guardian_session (
 		id VARCHAR(20) PRIMARY KEY,
-		user_id INTEGER,
+		user_id TEXT,
 		expires_at DATETIME
 	)`)
 	return err
@@ -58,7 +60,7 @@ func (s *SQLiteAdapter) DeleteSession(id string) error {
 	return nil
 }
 
-func (s *SQLiteAdapter) DeleteAllSessions(user_id int) error {
+func (s *SQLiteAdapter) DeleteAllSessions(user_id string) error {
 	_, err := s.db.Exec("DELETE FROM guardian_session WHERE user_id=?", user_id)
 	return err
 }

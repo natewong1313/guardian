@@ -8,7 +8,7 @@ import (
 
 	"github.com/natewong1313/guardian"
 	"github.com/natewong1313/guardian/pkg/adapters/sqlite"
-	"golang.org/x/crypto/bcrypt"
+	// "golang.org/x/crypto/bcrypt"
 )
 
 func setupDB() (*sql.DB, error) {
@@ -19,7 +19,9 @@ func setupDB() (*sql.DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
-	migrate(db)
+	if err := migrate(db); err != nil {
+		return nil, err
+	}
 	return db, nil
 }
 
@@ -31,7 +33,7 @@ type userRow struct {
 
 func migrate(db *sql.DB) error {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS users (
-		id INTEGER AUTOINCREMENT PRIMARY KEY,
+		id INTEGER INCREMENT PRIMARY KEY,
 		email TEXT UNIQUE,
 		password_hash VARCHAR(64)
 	)`)
@@ -41,11 +43,12 @@ func migrate(db *sql.DB) error {
 	return nil
 }
 
-type signinRequest struct {
+type requestBody struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// TODO: finish password hasing
 func main() {
 	adapter, err := sqlite.New("./foo.db")
 	if err != nil {
@@ -57,18 +60,78 @@ func main() {
 	}
 
 	router := http.NewServeMux()
+	router.HandleFunc("GET /protected", func(w http.ResponseWriter, r *http.Request) {
+		cookies := r.Cookies()
+
+		var session_token string
+		for _, cookie := range cookies {
+			if cookie.Name == "session" {
+				session_token = cookie.Value
+				break
+			}
+		}
+		if session_token == "" {
+			http.Error(w, "missing session", 401)
+			return
+		}
+
+		_, err := guardian.ValidateSessionID(session_token, adapter)
+		if err != nil {
+			http.Error(w, err.Error(), 401)
+			return
+		}
+
+		fmt.Fprintf(w, "success", 201)
+	})
+	router.HandleFunc("POST /signup", func(w http.ResponseWriter, r *http.Request) {
+		body := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(body); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		hashedPassword := body.Password
+
+		res, err := db.Exec("INSERT INTO users (email, password_hash) VALUES (?, ?)", body.Email, hashedPassword)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		user_id, err := res.LastInsertId()
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		session_token := guardian.GenerateSessionToken()
+		session, err := guardian.CreateSession(session_token, string(user_id), adapter)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:   "session",
+			Value:  session.ID,
+			Path:   "/",
+			MaxAge: int(session.ExpiresAt.Unix()),
+		})
+
+		fmt.Fprint(w, "success", 201)
+	})
 	router.HandleFunc("POST /signin", func(w http.ResponseWriter, r *http.Request) {
-		body := &signinRequest{}
+		body := &requestBody{}
 		if err := json.NewDecoder(r.Body).Decode(body); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
+		hashedPassword := body.Password
+
+		// hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+		// if err != nil {
+		// 	http.Error(w, err.Error(), 400)
+		// 	return
+		// }
 
 		user := &userRow{}
 		row := db.QueryRow("SELECT * FROM users WHERE email=?", body.Email)
@@ -83,7 +146,7 @@ func main() {
 		}
 
 		session_token := guardian.GenerateSessionToken()
-		session, err := guardian.CreateSession(session_token, user.ID, adapter)
+		session, err := guardian.CreateSession(session_token, string(user.ID), adapter)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
