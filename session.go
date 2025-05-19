@@ -3,8 +3,10 @@ package guardian
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -14,48 +16,32 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-func GenerateSessionToken() []byte {
+func GenerateSessionToken() string {
 	bytes := make([]byte, 20)
 	// never throws an error so we can safely ignore
 	rand.Read(bytes)
-	return bytes
+	return base32.StdEncoding.EncodeToString(bytes)
 }
 
-func getSessionId(token []byte) string {
-	hashed_token := sha256.Sum256(token)
+func getSessionId(token string) string {
+	hashed_token := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hashed_token[:])
 }
 
-func CreateSession(token []byte, user_id string, db DatabaseAdapter) (*Session, error) {
+func CreateSession(token string, user_id string, db DatabaseAdapter) (*Session, error) {
 	session_id := getSessionId(token)
 	session := &Session{
 		ID:        session_id,
 		UserID:    user_id,
 		ExpiresAt: time.Now().AddDate(0, 0, 30),
 	}
+
 	err := db.CreateSession(session)
 	return session, err
 }
 
-func ValidateSessionToken(token []byte, db DatabaseAdapter) (*Session, error) {
+func ValidateSessionToken(token string, db DatabaseAdapter) (*Session, error) {
 	session_id := getSessionId(token)
-	session, err := db.GetSession(session_id)
-	if err != nil || session == nil {
-		return session, err
-	}
-	if time.Now().After(session.ExpiresAt) {
-		db.DeleteSession(session_id)
-		return nil, errors.New("session has expired.")
-	}
-	half_expiry := session.ExpiresAt.AddDate(0, 0, 15)
-	if time.Now().After(half_expiry) {
-		session.ExpiresAt = half_expiry
-		db.UpdateSession(session.ID, session.ExpiresAt)
-	}
-	return session, nil
-}
-
-func ValidateSessionID(session_id string, db DatabaseAdapter) (*Session, error) {
 	session, err := db.GetSession(session_id)
 	if err != nil || session == nil {
 		return session, err

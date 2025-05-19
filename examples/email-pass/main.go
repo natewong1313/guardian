@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/natewong1313/guardian"
 	"github.com/natewong1313/guardian/pkg/adapters/sqlite"
-	// "golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func setupDB() (*sql.DB, error) {
@@ -48,7 +49,6 @@ type requestBody struct {
 	Password string `json:"password"`
 }
 
-// TODO: finish password hasing
 func main() {
 	adapter, err := sqlite.New("./foo.db")
 	if err != nil {
@@ -75,13 +75,13 @@ func main() {
 			return
 		}
 
-		_, err := guardian.ValidateSessionID(session_token, adapter)
+		session, err := guardian.ValidateSessionToken(session_token, adapter)
 		if err != nil {
 			http.Error(w, err.Error(), 401)
 			return
 		}
 
-		fmt.Fprintf(w, "success", 201)
+		fmt.Fprintf(w, "user id: %s", session.UserID)
 	})
 	router.HandleFunc("POST /signup", func(w http.ResponseWriter, r *http.Request) {
 		body := &requestBody{}
@@ -89,7 +89,12 @@ func main() {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		hashedPassword := body.Password
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
 
 		res, err := db.Exec("INSERT INTO users (email, password_hash) VALUES (?, ?)", body.Email, hashedPassword)
 		if err != nil {
@@ -103,7 +108,7 @@ func main() {
 		}
 
 		session_token := guardian.GenerateSessionToken()
-		session, err := guardian.CreateSession(session_token, string(user_id), adapter)
+		session, err := guardian.CreateSession(session_token, strconv.Itoa(int(user_id)), adapter)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -111,12 +116,13 @@ func main() {
 
 		http.SetCookie(w, &http.Cookie{
 			Name:   "session",
-			Value:  session.ID,
+			Value:  session_token,
 			Path:   "/",
 			MaxAge: int(session.ExpiresAt.Unix()),
 		})
 
-		fmt.Fprint(w, "success", 201)
+		w.WriteHeader(201)
+		fmt.Fprint(w, "success")
 	})
 	router.HandleFunc("POST /signin", func(w http.ResponseWriter, r *http.Request) {
 		body := &requestBody{}
@@ -125,13 +131,11 @@ func main() {
 			return
 		}
 
-		hashedPassword := body.Password
-
-		// hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
-		// if err != nil {
-		// 	http.Error(w, err.Error(), 400)
-		// 	return
-		// }
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
 
 		user := &userRow{}
 		row := db.QueryRow("SELECT * FROM users WHERE email=?", body.Email)
@@ -146,7 +150,7 @@ func main() {
 		}
 
 		session_token := guardian.GenerateSessionToken()
-		session, err := guardian.CreateSession(session_token, string(user.ID), adapter)
+		session, err := guardian.CreateSession(session_token, strconv.Itoa(user.ID), adapter)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -154,12 +158,12 @@ func main() {
 
 		http.SetCookie(w, &http.Cookie{
 			Name:   "session",
-			Value:  session.ID,
+			Value:  string(session_token),
 			Path:   "/",
 			MaxAge: int(session.ExpiresAt.Unix()),
 		})
 
-		fmt.Fprintf(w, "success", 201)
+		fmt.Fprint(w, "success")
 	})
 
 	if err := http.ListenAndServe(":6969", router); err != nil {
