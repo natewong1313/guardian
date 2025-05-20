@@ -13,6 +13,20 @@ type SQLiteAdapter struct {
 	db *sql.DB
 }
 
+const (
+	CreateTableStmt = `CREATE TABLE IF NOT EXISTS guardian_session (
+		id VARCHAR(20) PRIMARY KEY,
+		user_id TEXT,
+		updated_at DATETIME,
+		expires_at DATETIME
+	)`
+	CreateSessionStmt     = "INSERT INTO guardian_session (id, user_id, updated_at, expires_at) VALUES (?, ?, ?)"
+	GetSessionStmt        = "SELECT * FROM guardian_session WHERE id=?"
+	DeleteSessionStmt     = "DELETE FROM guardian_session WHERE id=?"
+	DeleteUserSessionStmt = "DELETE FROM guardian_session WHERE user_id=?"
+	UpdateSessionStmt     = "UPDATE guardian_session SET expires_at=? WHERE id=?"
+)
+
 func New(table string) (*SQLiteAdapter, error) {
 	db, err := sql.Open("sqlite3", table)
 	if err != nil {
@@ -28,29 +42,24 @@ func New(table string) (*SQLiteAdapter, error) {
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS guardian_session (
-		id VARCHAR(20) PRIMARY KEY,
-		user_id TEXT,
-		updated_at DATETIME,
-		expires_at DATETIME
-	)`)
+	_, err := db.Exec(CreateTableStmt)
 	return err
 }
 
 func (s *SQLiteAdapter) CreateSession(session *guardian.Session) error {
-	_, err := s.db.Exec("INSERT INTO guardian_session (id, user_id, updated_at, expires_at) VALUES (?, ?, ?)", &session.ID, &session.UserID, &session.UpdatedAt, &session.ExpiresAt)
+	_, err := s.db.Exec(CreateSessionStmt, &session.ID, &session.UserID, &session.UpdatedAt, &session.ExpiresAt)
 	return err
 }
 
 func (s *SQLiteAdapter) GetSession(id string) (*guardian.Session, error) {
 	session := &guardian.Session{}
-	row := s.db.QueryRow("SELECT * FROM guardian_session WHERE id=?", id)
+	row := s.db.QueryRow(GetSessionStmt, id)
 	err := row.Scan(&session.ID, &session.UserID, &session.UpdatedAt, &session.ExpiresAt)
 	return session, err
 }
 
 func (s *SQLiteAdapter) DeleteSession(id string) error {
-	result, err := s.db.Exec("DELETE FROM guardian_session WHERE id=?", id)
+	result, err := s.db.Exec(DeleteSessionStmt, id)
 	if err != nil {
 		return err
 	}
@@ -62,12 +71,12 @@ func (s *SQLiteAdapter) DeleteSession(id string) error {
 }
 
 func (s *SQLiteAdapter) DeleteAllSessions(userID string) error {
-	_, err := s.db.Exec("DELETE FROM guardian_session WHERE user_id=?", userID)
+	_, err := s.db.Exec(DeleteUserSessionStmt, userID)
 	return err
 }
 
 func (s *SQLiteAdapter) UpdateSession(id string, expiresAt time.Time) error {
-	result, err := s.db.Exec("UPDATE guardian_session SET expires_at=? WHERE id=?", expiresAt, id)
+	result, err := s.db.Exec(UpdateSessionStmt, expiresAt, id)
 	if err != nil {
 		return err
 	}

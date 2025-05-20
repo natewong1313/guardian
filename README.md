@@ -22,5 +22,3 @@ type DatabaseAdapter interface {
 
 ## todo
 - refactor constants
-- fix snake case (got used to rust)
-- test coverage
