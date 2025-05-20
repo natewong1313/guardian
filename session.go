@@ -6,13 +6,13 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 )
 
 type Session struct {
 	ID        string
 	UserID    string
+	UpdatedAt time.Time
 	ExpiresAt time.Time
 }
 
@@ -24,16 +24,21 @@ func GenerateSessionToken() string {
 }
 
 func getSessionId(token string) string {
-	hashed_token := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hashed_token[:])
+	hashedToken := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hashedToken[:])
 }
 
-func CreateSession(token string, user_id string, db DatabaseAdapter) (*Session, error) {
-	session_id := getSessionId(token)
+func CreateSession(token string, userID string, db DatabaseAdapter, expiry ...int) (*Session, error) {
+	sessionID := getSessionId(token)
+	expiresIn := 30
+	if len(expiry) > 0 {
+		expiresIn = expiry[0]
+	}
 	session := &Session{
-		ID:        session_id,
-		UserID:    user_id,
-		ExpiresAt: time.Now().AddDate(0, 0, 30),
+		ID:        sessionID,
+		UserID:    userID,
+		UpdatedAt: time.Now(),
+		ExpiresAt: time.Now().AddDate(0, 0, expiresIn),
 	}
 
 	err := db.CreateSession(session)
@@ -41,28 +46,35 @@ func CreateSession(token string, user_id string, db DatabaseAdapter) (*Session, 
 }
 
 func ValidateSessionToken(token string, db DatabaseAdapter) (*Session, error) {
-	session_id := getSessionId(token)
-	session, err := db.GetSession(session_id)
+	sessionID := getSessionId(token)
+	session, err := db.GetSession(sessionID)
 	if err != nil || session == nil {
-		return session, err
+		return nil, err
 	}
-	if time.Now().After(session.ExpiresAt) {
-		db.DeleteSession(session_id)
-		return nil, errors.New("session has expired.")
+	currentTime := time.Now()
+	if currentTime.After(session.ExpiresAt) {
+		db.DeleteSession(sessionID)
+		return nil, errors.New("session has expired")
 	}
-	half_expiry := session.ExpiresAt.AddDate(0, 0, 15)
-	if time.Now().After(half_expiry) {
-		session.ExpiresAt = half_expiry
+
+	expiryDuration := session.ExpiresAt.Sub(session.UpdatedAt)
+	// extend the session expiry
+	// if theres less than half the expiry duration left
+	// this is computed by comparing the updatedAt time and expiresAt
+	if session.UpdatedAt.Add(expiryDuration/2).Compare(currentTime) == -1 {
+		session.UpdatedAt = time.Now()
+		expiryDurationDays := expiryDuration.Hours() / 24
+		session.ExpiresAt = currentTime.AddDate(0, 0, int(expiryDurationDays))
 		db.UpdateSession(session.ID, session.ExpiresAt)
 	}
 	return session, nil
 }
 
-func InvalidateSession(session_id string, db DatabaseAdapter) error {
-	return db.DeleteSession(session_id)
+func InvalidateSession(sessionID string, db DatabaseAdapter) error {
+	return db.DeleteSession(sessionID)
 
 }
 
-func InvalidateAllSessions(user_id string, db DatabaseAdapter) error {
-	return db.DeleteAllSessions(user_id)
+func InvalidateAllSessions(userID string, db DatabaseAdapter) error {
+	return db.DeleteAllSessions(userID)
 }

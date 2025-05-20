@@ -63,19 +63,19 @@ func main() {
 	router.HandleFunc("GET /protected", func(w http.ResponseWriter, r *http.Request) {
 		cookies := r.Cookies()
 
-		var session_token string
+		var sessionToken string
 		for _, cookie := range cookies {
 			if cookie.Name == "session" {
-				session_token = cookie.Value
+				sessionToken = cookie.Value
 				break
 			}
 		}
-		if session_token == "" {
+		if sessionToken == "" {
 			http.Error(w, "missing session", 401)
 			return
 		}
 
-		session, err := guardian.ValidateSessionToken(session_token, adapter)
+		session, err := guardian.ValidateSessionToken(sessionToken, adapter)
 		if err != nil {
 			http.Error(w, err.Error(), 401)
 			return
@@ -101,14 +101,14 @@ func main() {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		user_id, err := res.LastInsertId()
+		userID, err := res.LastInsertId()
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		session_token := guardian.GenerateSessionToken()
-		session, err := guardian.CreateSession(session_token, strconv.Itoa(int(user_id)), adapter)
+		sessionToken := guardian.GenerateSessionToken()
+		session, err := guardian.CreateSession(sessionToken, strconv.Itoa(int(userID)), adapter)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -116,7 +116,7 @@ func main() {
 
 		http.SetCookie(w, &http.Cookie{
 			Name:   "session",
-			Value:  session_token,
+			Value:  sessionToken,
 			Path:   "/",
 			MaxAge: int(session.ExpiresAt.Unix()),
 		})
@@ -149,8 +149,8 @@ func main() {
 			return
 		}
 
-		session_token := guardian.GenerateSessionToken()
-		session, err := guardian.CreateSession(session_token, strconv.Itoa(user.ID), adapter)
+		sessionToken := guardian.GenerateSessionToken()
+		session, err := guardian.CreateSession(sessionToken, strconv.Itoa(user.ID), adapter)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -158,7 +158,7 @@ func main() {
 
 		http.SetCookie(w, &http.Cookie{
 			Name:   "session",
-			Value:  string(session_token),
+			Value:  string(sessionToken),
 			Path:   "/",
 			MaxAge: int(session.ExpiresAt.Unix()),
 		})

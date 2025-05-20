@@ -14,7 +14,13 @@ type DatabaseAdapter interface {
 	CreateSession(session *Session) error
 	GetSession(id string) (*Session, error)
 	DeleteSession(id string) error
-	DeleteAllSessions(user_id string) error
-	UpdateSession(id string, expires_at time.Time) error
+	DeleteAllSessions(userID string) error
+	UpdateSession(id string, expiresAt time.Time) error
 }
 ```
+
+
+## todo
+- refactor constants
+- fix snake case (got used to rust)
+- test coverage
