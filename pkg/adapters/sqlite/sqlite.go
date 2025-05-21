@@ -15,20 +15,20 @@ type SQLiteAdapter struct {
 
 const (
 	CreateTableStmt = `CREATE TABLE IF NOT EXISTS guardian_session (
-		id VARCHAR(20) PRIMARY KEY,
-		user_id TEXT,
-		updated_at DATETIME,
-		expires_at DATETIME
+		id VARCHAR(20) PRIMARY KEY NOT NULL,
+		user_id TEXT NOT NULL,
+		updated_at DATETIME NOT NULL,
+		expires_at DATETIME NOT NULL
 	)`
-	CreateSessionStmt     = "INSERT INTO guardian_session (id, user_id, updated_at, expires_at) VALUES (?, ?, ?)"
+	CreateSessionStmt     = "INSERT INTO guardian_session (id, user_id, updated_at, expires_at) VALUES (?, ?, ?, ?)"
 	GetSessionStmt        = "SELECT * FROM guardian_session WHERE id=?"
 	DeleteSessionStmt     = "DELETE FROM guardian_session WHERE id=?"
 	DeleteUserSessionStmt = "DELETE FROM guardian_session WHERE user_id=?"
 	UpdateSessionStmt     = "UPDATE guardian_session SET expires_at=? WHERE id=?"
 )
 
-func New(table string) (*SQLiteAdapter, error) {
-	db, err := sql.Open("sqlite3", table)
+func New(dataSourceName string) (*SQLiteAdapter, error) {
+	db, err := sql.Open("sqlite3", dataSourceName)
 	if err != nil {
 		return nil, err
 	}

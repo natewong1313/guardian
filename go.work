@@ -1,5 +1,6 @@
-go 1.24.2
+go 1.24.3
 
 use (
+	./pkg/adapters/postgres
 	./pkg/adapters/sqlite
 )

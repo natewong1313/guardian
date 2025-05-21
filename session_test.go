@@ -64,6 +64,7 @@ func TestSessionTokenExpiryRefresh(t *testing.T) {
 		session, err := ValidateSessionToken("token", db)
 		if err != nil {
 			t.Errorf("unexpected error: %v\n", err)
+			continue
 		}
 		daysUntilExpiry := int(math.Round(session.ExpiresAt.Sub(time.Now()).Hours() / 24))
 		if daysUntilExpiry != expectedDaysUntilExpiry {
