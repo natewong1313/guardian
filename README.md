@@ -5,8 +5,8 @@ view an example [here](./examples/email-pass/main.go)
 
 ## adapters
 guardian currently has the following adapters available for installation
-- sqlite
-- postgres [in progress]
+- [sqlite](./pkg/adapters/sqlite/)
+- [postgres](./pkg/adapters/postgres/) 
 
 its easy to write your own adapter as well. guardian exposes the following interface you can implement:
 ```go
