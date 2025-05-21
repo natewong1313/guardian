@@ -55,7 +55,10 @@ func (s *SQLiteAdapter) GetSession(id string) (*guardian.Session, error) {
 	session := &guardian.Session{}
 	row := s.db.QueryRow(GetSessionStmt, id)
 	err := row.Scan(&session.ID, &session.UserID, &session.UpdatedAt, &session.ExpiresAt)
-	return session, err
+	if err != nil {
+		return nil, err
+	}
+	return session, nil
 }
 
 func (s *SQLiteAdapter) DeleteSession(id string) error {
